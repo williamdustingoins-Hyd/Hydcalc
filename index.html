@@ -61,6 +61,31 @@
   main { padding:12px 12px 80px; }
   .view { display:none; }
   .view.active { display:block; }
+  #sticky-result {
+    position:fixed; left:10px; right:10px; bottom:64px; z-index:99; display:none;
+    background:linear-gradient(135deg,var(--navy),var(--navy-2)); color:#fff;
+    border-radius:12px; padding:10px 14px; box-shadow:0 4px 14px rgba(0,0,0,.25);
+    justify-content:space-between; align-items:center; gap:10px; cursor:pointer;
+    font-family:var(--font-mono); font-size:15px; font-weight:700;
+  }
+  #sticky-result.show { display:flex; }
+  #sticky-result .sticky-hint { font-family:var(--font-body); font-size:11px; font-weight:500; opacity:.75; white-space:nowrap; }
+  .ph-line { font-size:12px; margin-top:6px; font-family:var(--font-body); line-height:1.4; }
+  .ph-line b { font-family:var(--font-mono); }
+  .cat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+  .cat-tile {
+    background:var(--surface); border:1px solid var(--border); border-left:5px solid var(--steel);
+    border-radius:12px; padding:12px; cursor:pointer; min-height:84px; user-select:none;
+    display:flex; flex-direction:column; justify-content:space-between;
+  }
+  .cat-tile:active { transform:scale(.97); background:var(--bg); }
+  .cat-tile.all { grid-column:1 / -1; min-height:0; }
+  .cat-tile-name { font-size:14px; font-weight:700; color:var(--text); display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+  .cat-tile-count { font-size:12px; font-weight:600; color:var(--muted); font-family:var(--font-mono); }
+  .cat-tile-sub { font-size:11px; color:var(--muted); margin-top:6px; line-height:1.35;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .browse-title { font-size:16px; font-weight:700; color:var(--text); margin:2px 0 10px; }
+  .browse-title span { font-size:12px; font-weight:600; color:var(--muted); font-family:var(--font-mono); margin-left:6px; }
   .pills {
     display:flex; gap:6px; overflow-x:auto; padding:4px 0 8px;
     margin-bottom:8px; scrollbar-width:none;
@@ -261,8 +286,7 @@
   .ts-result-fix { font-size:13px; color:var(--chrome); line-height:1.5; }
   .ts-breadcrumb { font-size:11px; color:var(--muted); margin-bottom:8px; line-height:1.4; }
   .ts-restart { background:var(--brand); color:#fff; border:none; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; width:100%; }
-  #vac-card summary::-webkit-details-marker { display:none; }
-  #vac-card summary::marker { content:''; }
+  .section-label { font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); font-weight:700; margin:4px 0 8px; }
   #vac-card select:focus { border-color:var(--brand); outline:none; }
   .pump-spec-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; }
   .pump-spec-card h3 { font-size:15px; font-weight:700; color:var(--navy); margin-bottom:6px; }
@@ -294,7 +318,8 @@
 
 <main>
   <div class="view active" id="view-browse">
-    <div class="pills" id="category-pills"></div>
+    <div id="browse-head"></div>
+    <div class="cat-grid" id="category-grid"></div>
     <div id="formula-list"></div>
   </div>
   <div class="view" id="view-detail">
@@ -317,12 +342,24 @@
   </div>
   <div class="view" id="view-troubleshoot"><div id="troubleshoot-content"></div></div>
   <div class="view" id="view-pumps">
-    <details class="calc-block" id="vac-card">
-      <summary style="cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between;">
-        <span><span class="calc-label">Inlet Vacuum Check</span><br><span style="font-size:12px; color:var(--muted);">Gauge at the pump inlet vs. the pump's limit</span></span>
-        <span style="font-size:18px; color:var(--muted);">▾</span>
-      </summary>
-      <div style="margin-top:12px;">
+    <div id="pump-home">
+      <div class="input-row" style="margin-bottom:12px;"><input type="search" id="pump-search" placeholder="Search pumps and tools..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="pumpSearchInput(this.value)"></div>
+      <div id="pump-tools-section">
+        <div class="section-label">Tools</div>
+        <div class="cat-grid" id="pump-tool-grid"></div>
+      </div>
+      <div id="pump-models-section">
+        <div class="section-label">Pump models</div>
+        <div class="pills" id="pump-pills"></div>
+        <div id="pumps-content"></div>
+      </div>
+    </div>
+    <div id="pump-sub" style="display:none;">
+      <button class="detail-back" onclick="pumpHome()">← Back</button>
+      <div id="pump-model-body"></div>
+      <div id="pump-tool-body">
+        <div id="ph-cards"></div>
+        <div class="calc-block tool-panel" id="vac-card" style="display:none;"><div style="margin-bottom:12px;"><span class="calc-label">Inlet Vacuum Check</span><br><span style="font-size:12px; color:var(--muted);">Gauge at the pump inlet vs. the pump's limit</span></div><div>
         <div class="input-group">
           <label>Pump type / fluid</label>
           <div class="input-row"><select id="vac-type" onchange="vacCalc()" style="flex:1; padding:12px; font-size:16px; border:1.5px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text);">
@@ -356,9 +393,9 @@
           <div style="font-size:11px; color:var(--muted); margin-top:6px;">1 inHg = 0.491154 psi (mercury at 32 °F)</div>
         </div>
       </div>
-    </details>
-    <div class="pills" id="pump-pills"></div>
-    <div id="pumps-content"></div>
+    </div></div>
+      </div>
+    </div>
   </div>
   <div class="view" id="view-oil">
     <div class="pills" id="oil-pills"></div>
@@ -378,6 +415,7 @@
   <div class="modal" id="modal-content"></div>
 </div>
 
+<div id="sticky-result" onclick="stickyTap()"><span id="sticky-text"></span><span class="sticky-hint">full result ↓</span></div>
 <nav class="tab-bar">
   <div class="tab active" data-tab="browse" onclick="switchTab('browse')"><div class="tab-icon">▦</div><div class="tab-label">Formulas</div></div>
   <div class="tab" data-tab="convert" onclick="switchTab('convert')"><div class="tab-icon">⇄</div><div class="tab-label">Convert</div></div>
@@ -399,8 +437,7 @@ const CATEGORIES = [
   { id:'pump', name:'Pumps' },
   { id:'motor', name:'Motors' },
   { id:'hst', name:'HST' },
-  { id:'pressure', name:'Pressure' },
-  { id:'flow', name:'Flow' },
+  { id:'pressure', name:'Pressure & Flow', cats:['pressure','flow'] },
   { id:'accum', name:'Accumulators' },
   { id:'electrical', name:'Electrical' },
   { id:'servo', name:'Servo / Prop' },
@@ -549,7 +586,62 @@ const FORMULAS = [
     ],
     calc:({HP,Eff})=>{ const btu=(1-Eff)*HP*2545; return { value:btu, unit:'BTU/hr', alt:`${(btu/3.412).toFixed(0)} W · ${(btu/12000).toFixed(2)} ton AC` }; }},
 
+  { id:'valve_heat', cat:'power', title:'Heat Out Across a Valve', formula:'BTU/hr = (ΔP × GPM ÷ 1714) × 2545',
+    description:"Pressure drop across a valve, orifice or relief valve does no work, so all of that hydraulic power is converted to heat. Use it to see how much heat one component puts into the oil.",
+    extra:['A relief valve dumping full pump flow: use the relief setting as ΔP and the full flow. The result equals the pump\'s whole hydraulic HP converted to heat.','Add up the heat from every valve, orifice and relief in the circuit when sizing a cooler.','Uses the shop constants 1714 and 2545. Exact values differ by about 0.03%.'],
+    inputs:[
+      { id:'dP', label:'Pressure drop across the valve', unit:'PSI', units:[{name:'PSI',factor:1},{name:'bar',factor:14.504}] },
+      { id:'Q', label:'Flow through the valve', unit:'GPM', units:[{name:'GPM',factor:1},{name:'LPM',factor:0.2642}] },
+    ],
+    calc:({dP,Q})=>{
+      if (!(dP>=0) || !(Q>=0)) return {value:null};
+      const r3 = x => Math.round(x*1000)/1000;
+      const fmt = x => Number(vacR2(x)).toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+      const HP  = r3(dP*Q/1714);
+      const btu = r3(HP*2545);
+      const kW  = r3(HP*0.746);
+      return { value:btu, display:fmt(btu), unit:'BTU/hr', alt:`${fmt(HP)} HP converted to heat · ${fmt(kW)} kW<br>${fmt(r3(btu/60))} BTU/min` };
+    }},
+
   // CYLINDERS
+  { id:'cyl_sizer', cat:'cylinder', title:'Cylinder Sizer', formula:'A = F ÷ PSI · D = √(4A ÷ π) · GPM = A × v × 60 ÷ 231',
+    description:"Works backward from the job: load, available pressure and speed give the bore, flow, and hydraulic HP. Add a rod diameter to check the retract stroke too. The bore is the calculated size, not a catalog size. Pick the next size up from the cylinder maker's list.",
+    extra:['Needed force = load × (1 + friction allowance). Friction allowance is a rule of thumb (about 5–10% for packing/seal friction).','Usable pressure = available pressure ÷ (1 + pressure-drop allowance). Leave at 0 if your line and valve drops are already out of the number.','Hydraulic HP = PSI × GPM ÷ 1714. Divide by pump efficiency to get input HP.','Retract check assumes the same load and the same pump flow as extend.'],
+    inputs:[
+      { id:'load', label:'Load', unit:'lb', units:[{name:'lb',factor:1},{name:'US ton',factor:2000}] },
+      { id:'PSI', label:'Available pressure', unit:'PSI', units:[{name:'PSI',factor:1},{name:'bar',factor:14.504}], hint:'Pressure at the pump, e.g. relief setting or what the system holds under load.' },
+      { id:'speed', label:'Required speed', unit:'in/sec', units:[{name:'in/sec',factor:1},{name:'ft/min',factor:0.2},{name:'in/min',factor:1/60}] },
+      { id:'fric', label:'Friction allowance', unit:'%', default:10, hint:'Rule of thumb: 5–10% of force for packing friction (10% = cautious end).' },
+      { id:'dp', label:'Pressure-drop allowance', unit:'%', default:0, hint:'Extra pressure for line and valve drops. Rule of thumb only, not a confirmed figure. Use your circuit\'s actual drop if you know it.' },
+      { id:'D_rod', label:'Rod diameter', unit:'in', units:[{name:'in',factor:1},{name:'mm',factor:0.0394}], optional:true, hint:'Enter to check retract force and speed.' },
+    ],
+    calc:({load,PSI,speed,fric,dp,D_rod})=>{
+      if (!(load>0) || !(PSI>0) || !(speed>0) || fric<0 || dp<0) return {value:null};
+      const r2 = x => (Math.round(Math.round(x*1000)/1000*100 + 1e-9)/100).toFixed(2);
+      const Fneed = load*(1+fric/100);
+      const Pus = PSI/(1+dp/100);
+      const A = Fneed/Pus;                       // in²
+      const D = Math.sqrt(4*A/Math.PI);          // in
+      const Q = A*speed*60/231;                  // GPM (speed in in/sec)
+      const HP = PSI*Q/1714;
+      let lines = [
+        `Bore area: ${r2(A)} in² · Force needed: ${r2(Fneed)} lb`,
+        `Usable pressure: ${r2(Pus)} PSI`,
+        `Flow needed: ${r2(Q)} GPM · Hydraulic HP: ${r2(HP)}`
+      ];
+      if (D_rod !== null && D_rod !== undefined && D_rod > 0){
+        if (D_rod >= D){
+          lines.push(`⚠ Rod (${r2(D_rod)} in) is not smaller than the calculated bore (${r2(D)} in). Choose a larger bore or smaller rod.`);
+        } else {
+          const Aret = A - Math.PI*D_rod*D_rod/4;
+          const Fret = Pus*Aret/(1+fric/100);
+          const vret = Q*231/Aret/60;            // in/sec at same flow
+          lines.push(`Retract: ${r2(Aret)} in² · ${r2(Fret)} lb available ${Fret>=load ? '✔ covers the load' : '✖ short of the load'}`);
+          lines.push(`Retract speed at same flow: ${r2(vret)} in/sec · ${r2(vret*5)} ft/min`);
+        }
+      }
+      return { value:D, display:r2(D), unit:'in bore', alt: lines.join('<br>') };
+    }},
   { id:'cyl_extend_force', cat:'cylinder', title:'Cylinder Extend Force', formula:'F = PSI × A_bore',
     description:"Extension force uses full bore area.",
     inputs:[
@@ -2012,16 +2104,56 @@ let searchQuery = '';
 let tsStack = ['root'];
 let scenarios = JSON.parse(localStorage.getItem('hydcalc_scenarios') || '[]');
 
-function renderCategoryPills(){
-  document.getElementById('category-pills').innerHTML = CATEGORIES.map(c=>
-    `<div class="pill ${c.id===activeCategory?'active':''}" onclick="setCategory('${c.id}')">${c.name}</div>`
-  ).join('');
+const CAT_COLORS = { all:'var(--brand)', laws:'#4D606B', fundamentals:'var(--navy)', power:'var(--navy)', cylinder:'var(--steel)',
+  pump:'var(--brand)', motor:'var(--purple)', hst:'var(--green)', pressure:'#A8430F', accum:'var(--rust)',
+  electrical:'#6B5C4D', servo:'#8C3D5C', fluid:'#4D606B' };
+let browseView = 'grid';   // 'grid' = category tiles, 'list' = formulas in one category
+function catMatches(c, x){ return c.id==='all' || (c.cats || [c.id]).includes(x.cat); }
+
+function renderBrowse(){
+  const grid = document.getElementById('category-grid');
+  const head = document.getElementById('browse-head');
+  const list = document.getElementById('formula-list');
+  const showGrid = !searchQuery && browseView === 'grid';
+  grid.style.display = showGrid ? 'grid' : 'none';
+  list.style.display = showGrid ? 'none' : 'block';
+  if (showGrid){
+    head.innerHTML = '';
+    grid.innerHTML = CATEGORIES.map(c=>{
+      const items = FORMULAS.filter(x=>catMatches(c,x));
+      const sub = c.id==='all' ? 'Every calculator and reference in one list' : items.slice(0,3).map(x=>x.title.replace(/\s*\(.*?\)\s*/g,' ').trim()).join(', ');
+      return `<div class="cat-tile ${c.id==='all'?'all':''}" style="border-left-color:${CAT_COLORS[c.id]||'var(--steel)'}" onclick="setCategory('${c.id}')">
+        <div class="cat-tile-name"><span>${c.name==='All'?'All formulas':c.name}</span><span class="cat-tile-count">${items.length}</span></div>
+        <div class="cat-tile-sub">${sub}</div>
+      </div>`;
+    }).join('');
+  } else if (searchQuery){
+    head.innerHTML = '';
+  } else {
+    const c = CATEGORIES.find(x=>x.id===activeCategory) || CATEGORIES[0];
+    const n = FORMULAS.filter(x=>catMatches(c,x)).length;
+    head.innerHTML = `<button class="detail-back" onclick="goToGrid()">← All categories</button>
+      <div class="browse-title">${c.id==='all'?'All formulas':c.name}<span>${n}</span></div>`;
+  }
+  renderFormulaList();
+}
+
+function goToGrid(){
+  browseView = 'grid';
+  activeCategory = 'all';
+  searchQuery = '';
+  document.getElementById('search-input').value = '';
+  renderBrowse();
+  window.scrollTo(0,0);
 }
 
 function renderFormulaList(){
   const list = document.getElementById('formula-list');
   let f = FORMULAS;
-  if (activeCategory !== 'all') f = f.filter(x=>x.cat===activeCategory);
+  if (!searchQuery){
+    const c = CATEGORIES.find(x=>x.id===activeCategory) || CATEGORIES[0];
+    f = f.filter(x=>catMatches(c,x));
+  }
   if (searchQuery){
     const q = searchQuery.toLowerCase();
     f = f.filter(x=>x.title.toLowerCase().includes(q) || x.formula.toLowerCase().includes(q) || x.description.toLowerCase().includes(q));
@@ -2043,14 +2175,15 @@ function renderFormulaList(){
   }).join('');
 }
 
-function getCatName(id){ return (CATEGORIES.find(c=>c.id===id) || {name:id}).name; }
+function getCatName(id){ return (CATEGORIES.find(c=>(c.cats || [c.id]).includes(id)) || {name:id}).name; }
 
 function setCategory(id){
   activeCategory = id;
+  browseView = 'list';
   searchQuery = '';
   document.getElementById('search-input').value = '';
-  renderCategoryPills();
-  renderFormulaList();
+  renderBrowse();
+  window.scrollTo(0,0);
 }
 
 function openFormula(id){
@@ -2073,6 +2206,7 @@ function openFormula(id){
 }
 
 function goBack(){
+  hideSticky();
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById(`view-${activeTab}`).classList.add('active');
   document.getElementById('search-wrap').style.display = activeTab==='browse'?'block':'none';
@@ -2091,11 +2225,12 @@ function renderDetail(){
       const u = hasUnits ? inp.units[ui].name : inp.unit;
       const v = f._values[inp.id] !== null && f._values[inp.id] !== undefined ? f._values[inp.id] : '';
       return `<div class="input-group">
-        <label>${inp.label} <span class="unit">(${u})</span></label>
+        <label>${inp.label} <span class="unit">(${u}${inp.optional ? ', optional' : ''})</span></label>
         <div class="input-row">
-          <input type="number" inputmode="decimal" step="any" value="${v}" placeholder="Enter ${inp.label.toLowerCase()}" oninput="updateValue('${inp.id}', this.value)">
+          <input type="number" inputmode="decimal" step="any" value="${v}" placeholder="${inp.optional ? 'Optional' : 'Enter ' + inp.label.toLowerCase()}" oninput="updateValue('${inp.id}', this.value)">
           ${hasUnits ? `<button class="unit-toggle" onclick="toggleUnit('${inp.id}')">${u}</button>` : ''}
         </div>
+        ${inp.hint ? `<div style="font-size:11px; color:var(--muted); margin-top:4px;">${inp.hint}</div>` : ''}
       </div>`;
     }).join('');
   }
@@ -2150,7 +2285,7 @@ function computeResult(){
   let valid = true;
   f.inputs.forEach(inp=>{
     const v = f._values[inp.id];
-    if (v === null || v === undefined || isNaN(v)){ valid = false; return; }
+    if (v === null || v === undefined || isNaN(v)){ if (inp.optional){ args[inp.id] = null; return; } valid = false; return; }
     if (inp.units && inp.units.length > 1){
       args[inp.id] = v * inp.units[f._unitChoices[inp.id] || 0].factor;
     } else {
@@ -2160,18 +2295,21 @@ function computeResult(){
   const area = document.getElementById('result-area');
   if (!area) return;
   if (!valid){
+    hideSticky();
     area.innerHTML = '<div class="result-block"><div class="result-label">Result</div><div class="result-empty">Enter all values</div></div>';
     return;
   }
   try {
     const r = f.calc(args);
     if (r.value === null || isNaN(r.value) || !isFinite(r.value)) throw 0;
+    setSticky((r.display !== undefined ? r.display : formatNum(r.value)) + ' ' + r.unit, 'result-area');
     area.innerHTML = `<div class="result-block">
       <div class="result-label">Result</div>
-      <div class="result-value">${formatNum(r.value)}<span class="result-unit">${r.unit}</span></div>
+      <div class="result-value">${r.display !== undefined ? r.display : formatNum(r.value)}<span class="result-unit">${r.unit}</span></div>
       ${r.alt ? `<div class="result-alt">${r.alt}</div>` : ''}
     </div>`;
   } catch(e){
+    hideSticky();
     area.innerHTML = '<div class="result-block"><div class="result-label">Result</div><div class="result-empty">Check input values</div></div>';
   }
 }
@@ -2323,7 +2461,162 @@ function renderPumpPills(){
   ).join('');
 }
 
-function setPumpCategory(id){ activePumpCategory = id; renderPumpPills(); renderPumps(); }
+function setPumpCategory(id){ activePumpCategory = id; renderPumpHome(); }
+
+// ===== Sticky result bar =====
+let stickyAnchor = null, stickyActive = false, stickyObs = null, stickyVisible = true;
+function stickyUpdate(){
+  const bar = document.getElementById('sticky-result');
+  const tb = document.querySelector('.tab-bar');
+  bar.style.bottom = ((tb ? tb.offsetHeight : 56) + 8) + 'px';
+  bar.classList.toggle('show', stickyActive && !stickyVisible);
+}
+function setSticky(text, anchorId){
+  const el = document.getElementById(anchorId);
+  if (!el){ hideSticky(); return; }
+  stickyAnchor = el; stickyActive = true;
+  document.getElementById('sticky-text').textContent = text;
+  if (stickyObs) stickyObs.disconnect();
+  stickyObs = new IntersectionObserver(es=>{ stickyVisible = es[0].isIntersecting; stickyUpdate(); }, { threshold:0.4 });
+  stickyObs.observe(el);
+  stickyUpdate();
+}
+function hideSticky(){
+  stickyActive = false; stickyAnchor = null;
+  if (stickyObs){ stickyObs.disconnect(); stickyObs = null; }
+  stickyUpdate();
+}
+function stickyTap(){ if (stickyAnchor) stickyAnchor.scrollIntoView({ behavior:'smooth', block:'center' }); }
+
+// ===== Pump Health Check (flow test + case drain) =====
+let phcUnit = 'gpm', phcMaxDirty = false;
+function phField(id, label, unit, hint, extra){
+  extra = extra || {};
+  return `<div class="input-group">
+    <label>${label} <span class="unit" id="${id}-u">(${unit})</span></label>
+    <div class="input-row"><input type="number" inputmode="decimal" step="any" id="${id}" placeholder="${extra.optional ? 'Optional' : ''}" oninput="${extra.on || ''}">${extra.toggle || ''}</div>
+    ${hint ? `<div style="font-size:11px; color:var(--muted); margin-top:4px;">${hint}</div>` : ''}
+  </div>`;
+}
+function renderHealthCards(){
+  document.getElementById('ph-cards').innerHTML = `
+  <div class="calc-block tool-panel" id="phf-card" style="display:none;"><div style="margin-bottom:12px;"><span class="calc-label">Pump Health Check · Flow</span><br><span style="font-size:12px; color:var(--muted);">Measured flow vs. rated, adjusted for RPM and pressure</span></div><div>
+      ${phField('phf-rated','Rated flow','GPM','From the pump nameplate or catalog, at its rated RPM and pressure.',{on:'phfCalc()'})}
+      ${phField('phf-rrpm','Rated RPM','RPM','',{on:'phfCalc()'})}
+      ${phField('phf-rpsi','Rated pressure','PSI','Pressure the rated flow was specified at.',{on:'phfCalc()',optional:true})}
+      ${phField('phf-trpm','Test RPM','RPM','Measure it. A drooping engine or motor can look like a weak pump.',{on:'phfCalc()'})}
+      ${phField('phf-tpsi','Test pressure','PSI','Test at or near rated pressure with oil at operating temperature.',{on:'phfCalc()',optional:true})}
+      ${phField('phf-meas','Measured flow','GPM','Flow meter reading at the test pressure.',{on:'phfCalc()'})}
+      ${phField('phf-disp','Displacement','in³/rev','Adds a volumetric-efficiency check against theoretical flow.',{on:'phfCalc()',optional:true})}
+      <div id="phf-result"></div>
+    </div>
+  </div></div>
+  <div class="calc-block tool-panel" id="phc-card" style="display:none;"><div style="margin-bottom:12px;"><span class="calc-label">Pump Health Check · Case Drain</span><br><span style="font-size:12px; color:var(--muted);">Case temperature, case pressure and case flow</span></div><div>
+      ${phField('phc-res','Reservoir temperature','°F','',{on:'phcCalc()'})}
+      ${phField('phc-case','Case drain temperature','°F','Read at the case drain port, oil at operating temperature.',{on:'phcCalc()'})}
+      ${phField('phc-tmax','Pump max case temperature','°F','From the datasheet.',{on:'phcCalc()',optional:true})}
+      ${phField('phc-cp','Case pressure (measured)','PSI','Gauge at the case port, read at maximum case flow.',{on:'phcCalc()',optional:true})}
+      ${phField('phc-cpmax','Pump max case pressure','PSI','From the datasheet. It varies a lot by model: Parker PVplus 0.5 bar continuous (about 7 psi), Danfoss Series 90 3 bar (44 psi), Denison Gold Cup 75 psi.',{on:'phcCalc()',optional:true})}
+      ${phField('phc-cf','Case drain flow','<span id="phc-cf-unit">GPM</span>','Bucket test: catch the case drain oil for a timed interval. Hydrostatic transmissions: charge flow also goes to the case, so use the maker\'s method.',{on:'phcCalc()',optional:true,toggle:'<button class="unit-toggle" id="phc-cf-btn" onclick="phcToggleUnit()">GPM</button>'})}
+      ${phField('phc-max','Pump max flow','GPM','Auto-filled from the flow test. Change it if you know the pump\'s maximum.',{on:'phcMaxDirty=true; phcCalc()',optional:true})}
+      <div id="phc-result"></div>
+    </div>
+  </div></div>`;
+  phfCalc(); phcCalc();
+}
+function phNum(id){ const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; }
+function phBlock(id, label, lines){
+  document.getElementById(id).innerHTML = '<div class="result-block"><div class="result-label">' + label + '</div>' + lines.map(l=>'<div class="ph-line">'+l+'</div>').join('') + '</div>';
+}
+function phfCalc(){
+  const rated = phNum('phf-rated'), rrpm = phNum('phf-rrpm'), trpm = phNum('phf-trpm'), meas = phNum('phf-meas');
+  const rpsi = phNum('phf-rpsi'), tpsi = phNum('phf-tpsi'), disp = phNum('phf-disp');
+  if (!(rated>0) || !(rrpm>0) || !(trpm>0) || meas === null || meas < 0){
+    phBlock('phf-result','Flow check',['<span style="opacity:.8">Enter rated flow, rated RPM, test RPM and measured flow.</span>']);
+    if (stickyAnchor && stickyAnchor.id === 'phf-result') hideSticky();
+    return;
+  }
+  const expected = rated*trpm/rrpm;
+  const pct = Number(vacR2(meas/expected*100));
+  const low = Number(vacR2(100 - pct));
+  let lines = [`Expected at ${trpm} RPM: <b>${vacR2(expected)} GPM</b> (flow scales with RPM)`,
+               `Measured: <b>${vacR2(meas)} GPM</b> = <b>${vacR2(pct)}%</b> of expected`];
+  let icon;
+  if (low > 20){ icon = '✖'; lines.push('✖ More than 20% below rated flow: the pump is likely worn (rule of thumb). Rule out a starved inlet and low drive speed first.'); }
+  else if (low > 0){ icon = '✔'; lines.push(`✔ ${vacR2(low)}% low: within the 20% allowance. Log it and retest later, because a steady drop is the warning sign.`); }
+  else { icon = '✔'; lines.push('✔ At or above expected flow.'); }
+  if (rpsi !== null && tpsi !== null && tpsi < rpsi){
+    lines.push(`⚠ Tested at ${tpsi} PSI, below the rated ${rpsi} PSI. A worn pump can still look fine at lower pressure, so retest at rated pressure.`);
+  }
+  let theo = null;
+  if (disp !== null && disp > 0){
+    theo = disp*trpm/231;
+    const ve = Number(vacR2(meas/theo*100));
+    lines.push(`Theoretical flow: <b>${vacR2(theo)} GPM</b> · volumetric efficiency <b>${vacR2(ve)}%</b> ${ve >= 85 ? '✔ at or above the common 85% minimum' : '✖ below the common 85% minimum (replace or overhaul)'}`);
+    if (ve < 85) icon = '✖';
+  }
+  lines.push('<span style="opacity:.75; font-size:11px;">Rules of thumb. The pump maker\'s spec always wins.</span>');
+  phBlock('phf-result','Flow check',lines);
+  // feed the case-drain card's max flow
+  if (!phcMaxDirty){ document.getElementById('phc-max').value = vacR2(theo !== null ? theo : expected); phcCalc(); }
+  setSticky(`Flow ${vacR2(pct)}% of expected ${icon}`, 'phf-result');
+}
+function phcToggleUnit(){
+  const el = document.getElementById('phc-cf');
+  const cur = parseFloat(el.value);
+  if (!isNaN(cur)) el.value = Math.round((phcUnit==='gpm' ? cur*4 : cur/4)*1000)/1000;
+  phcUnit = phcUnit==='gpm' ? 'qtmin' : 'gpm';
+  const name = phcUnit==='gpm' ? 'GPM' : 'qt/min';
+  document.getElementById('phc-cf-btn').textContent = name;
+  document.getElementById('phc-cf-unit').textContent = name;
+  phcCalc();
+}
+function phcCalc(){
+  const res = phNum('phc-res'), cas = phNum('phc-case'), tmax = phNum('phc-tmax');
+  const cp = phNum('phc-cp'), cpmax = phNum('phc-cpmax');
+  const cfRaw = phNum('phc-cf'), maxFlow = phNum('phc-max');
+  let lines = [], flags = 0, any = false;
+  if (res !== null && cas !== null){
+    any = true;
+    const rise = Number(vacR2(cas - res));
+    lines.push(`Case drain is <b>${vacR2(rise)} °F</b> above the reservoir.`);
+    if (tmax !== null && cas > tmax){ flags++; lines.push(`✖ Case drain temperature ${cas} °F is over the pump's ${tmax} °F maximum.`); }
+    if (rise > 45){ flags++; lines.push('✖ More than 45 °F (25 °C) rise. Parker lists up to 25 °C above reservoir as the most to expect at the drain port of its PVplus pumps. Other pumps differ.'); }
+    else if (rise > 20){ flags++; lines.push('⚠ Above the roughly 20 °F rule of thumb. Compare with a reading from when the pump was new and with the datasheet.'); }
+    else { lines.push('✔ At or under the roughly 20 °F rule of thumb. Trend it over time.'); }
+  }
+  if (cp !== null){
+    any = true;
+    if (cpmax !== null && cpmax > 0){
+      const pc = Number(vacR2(cp/cpmax*100));
+      if (cp > cpmax){ flags++; lines.push(`✖ Case pressure <b>${cp} PSI</b> is over the ${cpmax} PSI limit (${vacR2(pc)}%). Check the drain line size, restrictions, and filters in the case line. A pressurized case can damage seals and internal parts.`); }
+      else { lines.push(`✔ Case pressure <b>${cp} PSI</b> is under the ${cpmax} PSI limit (${vacR2(pc)}%).`); }
+    } else {
+      lines.push(`Case pressure <b>${cp} PSI</b>. Enter the pump's max case pressure from its datasheet to check it.`);
+    }
+  }
+  if (cfRaw !== null){
+    any = true;
+    const gpm = phcUnit==='gpm' ? cfRaw : cfRaw/4;
+    if (maxFlow > 0){
+      const pf = Number(vacR2(gpm/maxFlow*100));
+      lines.push(`Case flow <b>${vacR2(gpm)} GPM</b> = <b>${vacR2(pf)}%</b> of max pump flow.`);
+      if (pf >= 10){ flags++; lines.push('✖ At or above about 10% of max pump flow, the usual replace-or-overhaul trigger.'); }
+      else if (pf > 5){ flags++; lines.push('⚠ Above the usual 1–5% normal range. Trend it and compare with the maker\'s case flow curve. Vane pumps usually bypass more than piston pumps.'); }
+      else { lines.push('✔ In the usual 1–5% range (rule of thumb).'); }
+    } else {
+      lines.push(`Case flow <b>${vacR2(gpm)} GPM</b>. Enter the pump max flow (or fill in the flow test) to get the percent.`);
+    }
+  }
+  if (!any){
+    phBlock('phc-result','Case drain check',['<span style="opacity:.8">Enter reservoir and case drain temperatures, case pressure, or case flow. Any one gives a check.</span>']);
+    if (stickyAnchor && stickyAnchor.id === 'phc-result') hideSticky();
+    return;
+  }
+  lines.push('<span style="opacity:.75; font-size:11px;">Rules of thumb. Measure at normal operating temperature and pressure, and use the pump maker\'s limits.</span>');
+  phBlock('phc-result','Case drain check',lines);
+  setSticky(flags === 0 ? 'Case drain: no flags ✔' : `Case drain: ${flags} flag${flags>1?'s':''} ⚠`, 'phc-result');
+}
 
 const VAC_INHG_PSI = 0.491154; // psi per inHg (mercury at 32 F)
 const VAC_TYPES = {
@@ -2359,6 +2652,7 @@ function vacCalc(){
   const raw = parseFloat(document.getElementById('vac-read').value);
   const out = document.getElementById('vac-result');
   if (isNaN(raw) || isNaN(limit) || limit <= 0){
+    if (stickyAnchor && stickyAnchor.id === 'vac-result') hideSticky();
     out.innerHTML = '<div class="result-block"><div class="result-empty">' + (needsLimit && (isNaN(limit)||limit<=0) ? 'Enter the pump\'s limit and your gauge reading' : 'Enter your gauge reading') + '</div></div>';
     return;
   }
@@ -2371,6 +2665,7 @@ function vacCalc(){
   if (inHg <= third){ status = '✔ Good'; msg = 'At or under 1/3 of the limit — about what a clean strainer and inlet line should read (rule of thumb).'; }
   else if (inHg <= limit){ status = '⚠ Under the limit, but high'; msg = 'Above 1/3 of the limit. Check the strainer, inlet line size and kinks, oil viscosity (cold oil?), and reservoir level.'; }
   else { status = '✖ Over the limit'; msg = 'Cavitation risk. Shut down and fix the inlet side: plugged strainer, collapsed hose, too-thick oil, or low oil level.'; }
+  setSticky(vacR2(inHg) + ' inHg · ' + status, 'vac-result');
   out.innerHTML = '<div class="result-block">' +
     '<div class="result-label">Inlet vacuum</div>' +
     '<div class="result-value">' + vacR2(inHg) + '<span class="result-unit">inHg</span> <span style="font-size:16px; opacity:.8;">= ' + vacR2(psi) + ' psi</span></div>' +
@@ -2380,10 +2675,8 @@ function vacCalc(){
     '</div>';
 }
 
-function renderPumps(){
-  let p = PUMPS;
-  if (activePumpCategory !== 'all') p = p.filter(x=>x.cat===activePumpCategory);
-  document.getElementById('pumps-content').innerHTML = p.map(pump=>`<div class="pump-spec-card">
+function pumpSpecHtml(pump){
+  return `<div class="pump-spec-card">
     <div class="pump-spec-eyebrow">${pump.cat === 'closed' ? 'Closed Circuit' : 'Open Circuit'}</div>
     <h3>${pump.name}</h3>
     <p style="font-size:12px; color:var(--muted); margin-bottom:10px;">${pump.type}</p>
@@ -2400,7 +2693,70 @@ function renderPumps(){
     <table class="pump-spec-table">${pump.settings.map(s=>`<tr><td>${s.spec}</td><td>${s.val}</td></tr>`).join('')}</table>
     <p style="font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--steel); font-weight:700; margin:10px 0 6px;">Troubleshooting</p>
     <ul style="list-style:none; padding:0;">${pump.troubleshoot.map(t=>`<li style="padding:3px 0 3px 14px; position:relative; font-size:12px;"><span style="position:absolute; left:0; color:var(--steel);">▸</span>${t}</li>`).join('')}</ul>
-  </div>`).join('');
+  </div>`;
+}
+
+let pumpSearch = '';
+const PUMP_TOOLS = [
+  { id:'phf-card', name:'Flow Test', sub:'Measured vs. rated flow, adjusted for RPM and pressure', kw:'pump health check flow test volumetric efficiency rated gpm worn' },
+  { id:'phc-card', name:'Case Drain', sub:'Case temperature, case pressure and case flow', kw:'pump health check case drain temperature pressure flow leakage' },
+  { id:'vac-card', name:'Inlet Vacuum', sub:'Gauge reading vs. the pump limit, inHg ⇄ psi', kw:'inlet suction vacuum cavitation inhg psi converter strainer' },
+];
+function renderPumpHome(){
+  const q = pumpSearch.trim().toLowerCase();
+  const tools = PUMP_TOOLS.filter(x=>!q || (x.name+' '+x.sub+' '+x.kw).toLowerCase().includes(q));
+  document.getElementById('pump-tools-section').style.display = tools.length ? 'block' : 'none';
+  document.getElementById('pump-tool-grid').innerHTML = tools.map(x=>`<div class="cat-tile" style="min-height:84px;" onclick="openPumpTool('${x.id}')">
+      <div class="cat-tile-name"><span>${x.name}</span></div>
+      <div class="cat-tile-sub">${x.sub}</div>
+    </div>`).join('');
+  document.getElementById('pump-pills').style.display = q ? 'none' : 'flex';
+  if (!q) renderPumpPills();
+  let list = PUMPS;
+  if (q) list = list.filter(x=>[x.name,x.type,x.notes,x.sizes,x.pressure].join(' ').toLowerCase().includes(q));
+  else if (activePumpCategory !== 'all') list = list.filter(x=>x.cat===activePumpCategory);
+  document.getElementById('pump-models-section').style.display = (list.length || !q) ? 'block' : 'none';
+  document.getElementById('pumps-content').innerHTML = list.length ? list.map(pump=>{
+    const i = PUMPS.indexOf(pump);
+    return `<div class="card" onclick="openPump(${i})">
+      <div class="card-header">
+        <div class="card-cat-tag cat-pump">${pump.cat === 'closed' ? 'Closed' : 'Open'}</div>
+        <div class="card-title">${pump.name}</div>
+      </div>
+      <div class="card-meta">${pump.type}</div>
+    </div>`;
+  }).join('') : '<div class="empty"><div class="empty-icon">⌕</div>No pumps match.</div>';
+}
+function renderPumps(){ renderPumpHome(); }
+function pumpSearchInput(v){ pumpSearch = v; renderPumpHome(); }
+function pumpShowSub(){
+  document.getElementById('pump-home').style.display = 'none';
+  document.getElementById('pump-sub').style.display = 'block';
+  window.scrollTo(0,0);
+}
+function pumpHome(){
+  hideSticky();
+  document.getElementById('pump-sub').style.display = 'none';
+  document.getElementById('pump-home').style.display = 'block';
+  renderPumpHome();
+  window.scrollTo(0,0);
+}
+function openPump(i){
+  hideSticky();
+  document.getElementById('pump-model-body').innerHTML = pumpSpecHtml(PUMPS[i]);
+  document.getElementById('pump-model-body').style.display = 'block';
+  document.getElementById('pump-tool-body').style.display = 'none';
+  pumpShowSub();
+}
+function openPumpTool(id){
+  hideSticky();
+  document.getElementById('pump-model-body').style.display = 'none';
+  document.getElementById('pump-tool-body').style.display = 'block';
+  document.querySelectorAll('#pump-tool-body .tool-panel').forEach(el=>el.style.display = el.id === id ? 'block' : 'none');
+  pumpShowSub();
+  if (id === 'phf-card') phfCalc();
+  if (id === 'phc-card') phcCalc();
+  if (id === 'vac-card') vacCalc();
 }
 
 function renderScenarios(){
@@ -2475,6 +2831,9 @@ function showModal(html){
 function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); }
 
 function switchTab(tab){
+  hideSticky();
+  const wasBrowse = activeTab === 'browse';
+  const wasPumps = activeTab === 'pumps';
   activeTab = tab;
   activeFormula = null;
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -2483,22 +2842,23 @@ function switchTab(tab){
   document.querySelector(`.tab[data-tab="${tab}"]`).classList.add('active');
   document.getElementById('search-wrap').style.display = tab === 'browse' ? 'block' : 'none';
   window.scrollTo(0,0);
+  if (tab === 'browse' && wasBrowse) goToGrid();
   if (tab === 'convert') renderConverter();
   if (tab === 'reference'){ renderReference(); if(activeRefSection==='help') renderHelp(); }
   if (tab === 'scenarios') renderScenarios();
   if (tab === 'symbols'){ renderISOPDF(); }
   if (tab === 'troubleshoot'){ tsStack = ['root']; renderTroubleshoot(); }
-  if (tab === 'pumps'){ renderPumpPills(); renderPumps(); vacCalc(); }
+  if (tab === 'pumps'){ if (wasPumps) pumpHome(); else renderPumpHome(); }
   if (tab === 'oil'){ renderOilPills(); renderOilContent(); }
 }
 
 document.getElementById('search-input').addEventListener('input', e=>{
   searchQuery = e.target.value;
-  renderFormulaList();
+  renderBrowse();
 });
 
-renderCategoryPills();
-renderFormulaList();
+renderBrowse();
+renderHealthCards();
 
 let isoPDFLoaded = false;
 let abdexPDFLoaded = false;
