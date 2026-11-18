@@ -286,6 +286,16 @@
   .ts-result-fix { font-size:13px; color:var(--chrome); line-height:1.5; }
   .ts-breadcrumb { font-size:11px; color:var(--muted); margin-bottom:8px; line-height:1.4; }
   .ts-restart { background:var(--brand); color:#fff; border:none; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; width:100%; }
+  .term-head { display:flex; align-items:center; gap:12px; }
+  .term-sym { min-width:56px; font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--navy); text-align:center; }
+  .term-name { font-size:14px; font-weight:700; color:var(--text); }
+  .term-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+  .term-body { margin-top:10px; border-top:1px solid var(--border); padding-top:10px; font-size:13px; line-height:1.5; }
+  .term-ctx { font-size:11px; letter-spacing:.5px; text-transform:uppercase; color:var(--steel); font-weight:700; }
+  .chip { display:inline-block; padding:6px 12px; border-radius:999px; border:1px solid var(--border); background:var(--light-bg); color:var(--navy); font-size:12px; font-weight:600; margin:6px 6px 0 0; cursor:pointer; }
+  .rule-tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:.3px; background:var(--light-bg); color:var(--muted); border:1px solid var(--border); }
+  .rule-tag.field { color:var(--navy); } .rule-tag.design { color:var(--steel); }
+  .rule-tag.ok { color:#1f7a3f; } .rule-tag.flag { color:#a05a00; }
   .section-label { font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); font-weight:700; margin:4px 0 8px; }
   #vac-card select:focus { border-color:var(--brand); outline:none; }
   .pump-spec-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; }
@@ -333,8 +343,14 @@
       <div class="pills" id="symbol-doc-pills" style="margin-bottom:8px;">
         <div class="pill active" id="pill-iso" onclick="switchSymbolDoc('iso')">ISO 1219-1 Full Reference</div>
         <div class="pill" id="pill-abdex" onclick="switchSymbolDoc('abdex')">Abdex Quick Reference</div>
+        <div class="pill" id="pill-terms" onclick="switchSymbolDoc('terms')">Terms</div>
       </div>
       <p id="symbol-doc-desc" style="font-size:11px; color:var(--muted); margin-bottom:8px;">ISO 1219-1 Fluid Power Graphic Symbols — official reference document.</p>
+      <div id="terms-view" style="display:none;">
+        <div class="input-row" style="margin-bottom:10px;"><input type="search" id="terms-search" placeholder="Search: Vg, delta p, gpm..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="termSearch(this.value)"></div>
+        <div class="pills" id="terms-pills" style="margin-bottom:10px;"></div>
+        <div id="terms-list"></div>
+      </div>
       <div id="pdf-embed-container" style="width:100%; border-radius:10px; overflow:hidden; border:1px solid var(--border); background:var(--surface);">
         <div id="pdf-loading" style="text-align:center; padding:40px; color:var(--muted); font-size:13px;">Loading PDF...</div>
       </div>
@@ -404,9 +420,16 @@
   <div class="view" id="view-reference">
     <div class="pills" id="ref-pills" style="margin-bottom:8px;">
       <div class="pill active" id="pill-quickref" onclick="switchRefSection('quickref')">Quick Ref</div>
+      <div class="pill" id="pill-rules" onclick="switchRefSection('rules')">Rules of Thumb</div>
       <div class="pill" id="pill-help" onclick="switchRefSection('help')">User Guide</div>
     </div>
     <div id="ref-quickref-content"></div>
+    <div id="ref-rules-content" style="display:none;">
+      <div class="input-row" style="margin-bottom:10px;"><input type="search" id="rules-search" placeholder="Search: suction, idle, heat..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="rulesSearch(this.value)"></div>
+      <div class="pills" id="rules-pills" style="margin-bottom:10px;"></div>
+      <p style="font-size:11px; color:var(--muted); margin-bottom:10px;">Rules of thumb are quick estimates, not specs. Tap a rule to see how it was checked and where sources differ.</p>
+      <div id="rules-list"></div>
+    </div>
     <div id="ref-help-content" style="display:none;"></div>
   </div>
 </main>
@@ -450,7 +473,7 @@ const FORMULAS = [
     description:"Pressure applied to a confined fluid is transmitted equally and undiminished in all directions throughout the fluid. The foundational principle of all hydraulics — a small piston pushing on confined oil can lift thousands of pounds at a larger piston. Force multiplication = F₂/F₁ = A₂/A₁. The trade-off: distance is inverse. Energy in = energy out.",
     readonly:true, extra:['Discovered by Blaise Pascal, 1653','Pressure is scalar — has no direction','Force multiplication does NOT violate energy conservation','Hydraulic press, jacks, brakes all rely on this'] },
   { id:'bernoulli', cat:'laws', title:"Bernoulli's Equation", formula:'P + ½ρV² + ρgh = constant',
-    description:"Along a streamline in steady flow, the sum of pressure, kinetic energy per unit volume, and potential energy per unit volume is constant. Velocity increases (smaller pipe) → pressure decreases. Explains venturi effect, pitot tubes, pressure losses at restrictions. In hydraulics, kinetic energy is being converted to/from pressure energy at orifices.",
+    description:"Along a streamline in steady flow, the sum of pressure, kinetic energy per unit volume, and potential energy per unit volume is constant. Velocity increases (smaller pipe) → pressure decreases. Explains venturi effect, pitot tubes, pressure drop (energy converted to heat) at restrictions. In hydraulics, kinetic energy is being converted to/from pressure energy at orifices.",
     inputs:[
       { id:'P1', label:'Inlet pressure', unit:'PSI', units:[{name:'PSI',factor:1},{name:'bar',factor:14.504}] },
       { id:'V1', label:'Inlet velocity', unit:'ft/sec', units:[{name:'ft/sec',factor:1},{name:'m/sec',factor:3.281}] },
@@ -461,7 +484,7 @@ const FORMULAS = [
       const rho=62.4*SG; const dP=(rho/(144*2*32.2))*(V1*V1-V2*V2); const P2=P1+dP;
       return { value:P2, unit:'PSI', alt:`ΔP = ${dP.toFixed(2)} PSI · ${(P2*0.0689).toFixed(2)} bar` };
     },
-    extra:['Daniel Bernoulli, 1738','For incompressible, inviscid, steady flow','Real fluids have friction — add losses','Calc assumes horizontal flow'] },
+    extra:['Daniel Bernoulli, 1738','For incompressible, inviscid, steady flow','Real fluids have friction — add the heat out from friction','Calc assumes horizontal flow'] },
   { id:'continuity', cat:'laws', title:'Continuity Equation', formula:'A₁V₁ = A₂V₂  (Q = constant)',
     description:"For incompressible fluid in steady flow, mass flow rate is constant. Volume flow = Area × Velocity. When pipe area decreases, velocity increases proportionally. Why fluid speeds up through restrictions and why suction lines must be larger than pressure lines.",
     inputs:[
@@ -730,7 +753,7 @@ const FORMULAS = [
       { id:'GPM_th', label:'Theoretical', unit:'GPM', units:[{name:'GPM',factor:1},{name:'LPM',factor:0.2642}] },
       { id:'Vol_Eff', label:'Vol eff (0-1)', unit:'', default:0.92 },
     ],
-    calc:({GPM_th,Vol_Eff})=>{ const g=GPM_th*Vol_Eff; return { value:g, unit:'GPM', alt:`${(g*3.785).toFixed(2)} LPM · Loss: ${(GPM_th-g).toFixed(2)} GPM` }; }},
+    calc:({GPM_th,Vol_Eff})=>{ const g=GPM_th*Vol_Eff; return { value:g, unit:'GPM', alt:`${(g*3.785).toFixed(2)} LPM · Leakage (slip): ${(GPM_th-g).toFixed(2)} GPM` }; }},
   { id:'pump_vol_eff', cat:'pump', title:'Volumetric Efficiency', formula:'Vol_Eff = GPM_act ÷ GPM_th',
     description:"Pump health. New: ~95%. Worn: <85%.",
     inputs:[
@@ -803,7 +826,7 @@ const FORMULAS = [
       { id:'EvM', label:'Motor vol eff', unit:'', default:0.95 },
       { id:'EmM', label:'Motor mech eff', unit:'', default:0.93 },
     ],
-    calc:({EvP,EmP,EvM,EmM})=>{ const e=EvP*EmP*EvM*EmM; return { value:e*100, unit:'%', alt:`Heat loss: ${((1-e)*100).toFixed(1)}%` }; }},
+    calc:({EvP,EmP,EvM,EmM})=>{ const e=EvP*EmP*EvM*EmM; return { value:e*100, unit:'%', alt:`Heat out: ${((1-e)*100).toFixed(1)}%` }; }},
 
   // PRESSURE
   { id:'cbv_setting', cat:'pressure', title:'Counterbalance Setting', formula:'CBV = Load P × 1.3',
@@ -2380,6 +2403,9 @@ function switchRefSection(which){
   activeRefSection = which;
   document.getElementById('pill-quickref').classList.toggle('active', which==='quickref');
   document.getElementById('pill-help').classList.toggle('active', which==='help');
+  document.getElementById('pill-rules').classList.toggle('active', which==='rules');
+  document.getElementById('ref-rules-content').style.display = which==='rules' ? 'block' : 'none';
+  if(which==='rules') renderRules();
   document.getElementById('ref-quickref-content').style.display = which==='quickref' ? 'block' : 'none';
   document.getElementById('ref-help-content').style.display = which==='help' ? 'block' : 'none';
   if(which==='help') renderHelp();
@@ -2759,6 +2785,298 @@ function openPumpTool(id){
   if (id === 'vac-card') vacCalc();
 }
 
+// ═══ TERMS INDEX (Symbols tab > Terms) ═══
+const TERM_CATS = [
+  {id:'all',name:'All'},{id:'multi',name:'Multiple meanings'},{id:'pressure',name:'Pressure'},{id:'flow',name:'Flow'},
+  {id:'power',name:'Power & Torque'},{id:'size',name:'Size & Speed'},{id:'heat',name:'Heat'},
+  {id:'pipe',name:'Pipe & Fluid'},{id:'eff',name:'Efficiency'},{id:'data',name:'Data Sheet'}
+];
+const TERMS = [
+  { sym:'PSI', name:'Pounds per square inch (gauge)', cats:['pressure'], alias:'psi psig pressure gauge',
+    meanings:[{ctx:'', def:'Pressure in pounds-force per square inch. In the pocket-book formulas it is gauge pressure: read off a gauge, with atmosphere as zero.', units:'psi · 1 bar = 14.504 psi'}],
+    used:['pressure_basic','force_basic','hyd_hp'], src:'Pocket book “Fluid Power Formulas”; Flodraulic' },
+  { sym:'bar', name:'Bar (metric pressure)', cats:['pressure'], alias:'bar pressure metric',
+    meanings:[{ctx:'', def:'Metric pressure unit used on European data sheets and in the metric power formula.', units:'bar · 1 bar = 14.504 psi'}],
+    used:['hyd_kw'], src:'Rexroth data sheets; PTC fluid power formula sheet' },
+  { sym:'p', name:'Pressure (data sheet style)', cats:['pressure','data'], alias:'p pressure lowercase datasheet',
+    meanings:[{ctx:'', def:'Lowercase p is pressure on Rexroth data sheets: p nom, p max, p abs, Δp.', units:'bar (psi on US sheets)'}],
+    used:[], src:'Rexroth RE 92705 (A10VO), RE 92202 (A7VO)' },
+  { sym:'P', name:'Capital P: four different jobs', cats:['pressure','power'], alias:'P burst perimeter power pressure',
+    meanings:[
+      {ctx:'Burst formula', def:'Burst pressure of pipe or tubing.', units:'psi'},
+      {ctx:'Gas laws (Boyle, Charles)', def:'Pressure, with P1 as initial and P2 as final.', units:'absolute pressure'},
+      {ctx:'Shear formula', def:'Perimeter of the area being sheared.', units:'in'},
+      {ctx:'Rexroth data sheets', def:'Power.', units:'kW'}],
+    used:['boyle_law','charles_law'], src:'Pocket book “Fluid Power Formulas”; Rexroth RE 91510 (A17FNO)', note:'Always read the key under the formula before trusting a capital P.' },
+  { sym:'Δp', name:'Differential pressure (pressure drop)', cats:['pressure'], alias:'delta p dp deltap pressure drop differential',
+    meanings:[{ctx:'', def:'Pressure difference between two points: across a valve, a filter, a line, or a motor. Energy dropped across it is converted to heat.', units:'psi or bar'}],
+    used:['valve_heat','darcy_weisbach'], src:'Rexroth RE 91510 (key: Δp differential pressure); pocket book (“pressure difference across motor”); Flodraulic (drop across a valve)' },
+  { sym:'p abs', name:'Absolute pressure', cats:['pressure','data'], alias:'pabs psia absolute inlet',
+    meanings:[{ctx:'', def:'Pressure counted from zero (a perfect vacuum), not from atmosphere. Rexroth lists pump inlet limits as absolute pressure at port S, so a gauge vacuum reading has to be converted.', units:'psia, bar abs'}],
+    used:[], tools:[{id:'vac-card',name:'Inlet Vacuum Check'}], src:'Rexroth RA 92703 (A10VO); pocket book (PSI is gauge)' },
+  { sym:'p nom', name:'Nominal pressure', cats:['pressure','data'], alias:'pnom nominal rated design pressure',
+    meanings:[{ctx:'', def:'Rexroth: the maximum design pressure, the level the pump is built to last at.', units:'bar / psi'}],
+    used:[], src:'Rexroth RE 92705 (A10VO), RE 92202 (A7VO), A11VO data sheet', note:'Wording is Rexroth’s. Other makers may call it “rated” and define it differently. Check that pump’s data sheet.' },
+  { sym:'p max', name:'Maximum pressure', cats:['pressure','data'], alias:'pmax maximum peak pressure',
+    meanings:[{ctx:'', def:'Rexroth: the maximum operating pressure, listed separately from nominal. Example: A10VO series 32 lists 280 bar nominal and 350 bar maximum.', units:'bar / psi'}],
+    used:[], src:'Rexroth RE 92705 (A10VO), A22VG data sheet', note:'Check the data sheet footnotes for any limit on how long or how often the pump can see it.' },
+  { sym:'p L max', name:'Maximum leakage (case) pressure', cats:['pressure','data'], alias:'pl max case drain pressure leakage fluid',
+    meanings:[{ctx:'', def:'The highest pressure allowed in the case drain / leakage-fluid line.', units:'bar / psi'}],
+    used:[], tools:[{id:'phc-card',name:'Case Drain check'}], src:'Rexroth RE 94001 (A2VK)', note:'Only one data sheet found with this exact symbol. Case limits differ by pump family, so use the datasheet for your pump.' },
+  { sym:'Q', name:'Flow rate', cats:['flow'], alias:'q gpm flow rate',
+    meanings:[{ctx:'', def:'Volume of oil moving per minute.', units:'GPM · 1 GPM = 3.785 LPM'}],
+    used:['velocity_line','hyd_hp','hyd_kw'], src:'PTC fluid power formula sheet (Q = flow, gpm); Brennan sizing formula; Flodraulic (GPM)' },
+  { sym:'GPM', name:'Gallons per minute', cats:['flow'], alias:'gpm flow gallons',
+    meanings:[{ctx:'', def:'US gallons per minute. 1 gallon = 231 cubic inches.', units:'GPM · 1 GPM = 231 in³/min'}],
+    used:['velocity_line','hyd_hp'], src:'Pocket book; Flodraulic; conversion sheet (231 in³/gal)' },
+  { sym:'LPM', name:'Litres per minute', cats:['flow'], alias:'lpm l/min litres liters flow',
+    meanings:[{ctx:'', def:'Metric flow. Rexroth writes it as l/min.', units:'LPM · 1 GPM = 3.785 LPM'}],
+    used:['hyd_kw'], src:'PTC formula sheet; Rexroth data sheets' },
+  { sym:'qv', name:'Flow (Rexroth)', cats:['flow','data'], alias:'qv q v flow rexroth',
+    meanings:[{ctx:'', def:'Flow on Rexroth sheets. qv = Vg × n × ηv ÷ 1000.', units:'l/min'}],
+    used:['pump_theoretical_flow'], src:'Rexroth RE 91510 (A17FNO)' },
+  { sym:'V', name:'Capital V: velocity or volume', cats:['flow','pipe'], alias:'V velocity volume speed',
+    meanings:[
+      {ctx:'Velocity formula', def:'Oil velocity in a line: V = GPM × 0.3208 ÷ A.', units:'ft/s'},
+      {ctx:'Gas laws', def:'Gas volume, with V1 initial and V2 final.', units:'in³, gal, or any consistent unit'}],
+    used:['velocity_line','boyle_law','charles_law'], src:'Pocket book; Brennan sizing formula; Flodraulic', note:'The pocket book uses V for both. The key under each formula tells you which.' },
+  { sym:'v', name:'Lowercase v: velocity', cats:['flow','pipe'], alias:'v velocity speed',
+    meanings:[{ctx:'', def:'Speed of oil in a line or of a rod. There is no case rule: the pocket book and Brennan use capital V for velocity, and other books write lowercase v.', units:'ft/s (fps) · in/min for pistons'}],
+    used:['velocity_line'], src:'Pocket book; Brennan sizing formula', note:'Case alone never settles it. Read the formula’s key.' },
+  { sym:'fps', name:'Feet per second', cats:['flow','pipe'], alias:'fps ft/s velocity',
+    meanings:[{ctx:'', def:'Oil velocity unit for line sizing. See Rules of Thumb for suggested ranges.', units:'ft/s'}],
+    used:['velocity_line'], src:'Flodraulic line-sizing tech tip; conversion sheet' },
+  { sym:'Vg', name:'Geometric displacement', cats:['size','data'], alias:'vg displacement per revolution geometric vg max vg min',
+    meanings:[
+      {ctx:'Vg', def:'Displacement per revolution. “Geometric” means theoretical: no leakage, no efficiency.', units:'cm³/rev · 1 in³ = 16.387 cm³'},
+      {ctx:'Vg max, Vg min', def:'Largest and smallest displacement a variable pump can be set to. Vg/Vg max is how far it is swivelled.', units:'cm³/rev'}],
+    used:['pump_theoretical_flow','pump_input_torque'], src:'Rexroth RE 92705, RE 91510, RA 92703 (US sheet lists 10 cm³ as 0.61 in³)', note:'This is Rexroth’s symbol. ISO 4391 sets letter symbols for pumps and motors, but the standard is paywalled and I could not read it. Other makers use other symbols for the same thing.' },
+  { sym:'D', name:'Capital D: displacement or diameter', cats:['size','pipe'], alias:'D diameter displacement',
+    meanings:[
+      {ctx:'Motor torque formula', def:'Motor displacement per revolution.', units:'in³/rev'},
+      {ctx:'Circle formulas', def:'Diameter.', units:'in'},
+      {ctx:'Barlow burst formula', def:'Nominal outside diameter of the tubing.', units:'in'}],
+    used:['area_from_dia','motor_torque'], src:'Pocket book; Skarda/Scribd Barlow formula sheet' },
+  { sym:'CIR', name:'Cubic inches per revolution', cats:['size'], alias:'cir displacement in3/rev',
+    meanings:[{ctx:'', def:'Pump or motor displacement in US units. Quick check: 1 CIR makes about 16 lb·in of torque per 100 psi (100 ÷ 2π = 15.92).', units:'in³/rev'}],
+    used:['motor_torque','pump_input_torque'], src:'Conversion/formula sheet; pocket book T = D × PSI ÷ 24π' },
+  { sym:'CIM', name:'Cubic inches per minute', cats:['flow'], alias:'cim in3/min flow',
+    meanings:[{ctx:'', def:'Oil flow into a cylinder expressed in cubic inches per minute. GPM × 231 = CIM.', units:'in³/min'}],
+    used:['cyl_extend_speed'], src:'Pocket book; conversion sheet (231)' },
+  { sym:'A', name:'Capital A: four different jobs', cats:['size','pipe','heat'], alias:'A area angle surface',
+    meanings:[
+      {ctx:'Velocity formula', def:'Inside area of the pipe.', units:'in²'},
+      {ctx:'Cylinder speed and force', def:'Piston area.', units:'in²'},
+      {ctx:'Reservoir heat formula', def:'Surface area of the reservoir.', units:'ft²'},
+      {ctx:'Angled cylinder force', def:'Angle between the cylinder axis and the load direction.', units:'degrees'}],
+    used:['velocity_line','cyl_extend_force','area_from_dia'], src:'Pocket book “Fluid Power Formulas”', note:'Same letter, three different area units and an angle. Check the key every time.' },
+  { sym:'T', name:'Capital T: torque, temperature, force or thickness', cats:['power','heat'], alias:'T torque temperature thickness force',
+    meanings:[
+      {ctx:'Torque and horsepower', def:'Torque.', units:'lb·ft (Rexroth: N·m)'},
+      {ctx:'Gas laws', def:'Absolute temperature of the gas (°F + 459.7).', units:'°R'},
+      {ctx:'Angled cylinder force', def:'Total cylinder force.', units:'lb'},
+      {ctx:'Shear formula', def:'Sheet thickness.', units:'in'}],
+    used:['pump_input_torque','charles_law'], src:'Pocket book; Flodraulic; Skarda/Scribd formula sheet; Rexroth RE 91510', note:'The pocket book uses T four ways on one page.' },
+  { sym:'t', name:'Lowercase t: wall thickness or time', cats:['pipe'], alias:'t thickness time wall',
+    meanings:[
+      {ctx:'Burst formula', def:'Wall thickness of the pipe or tubing.', units:'in'},
+      {ctx:'Rexroth pressure-rise charts', def:'Time.', units:'s'}],
+    used:[], src:'Pocket book; Skarda/Scribd Barlow sheet; Rexroth data sheet charts' },
+  { sym:'S', name:'Capital S: piston speed or tensile strength', cats:['size','pipe'], alias:'S speed strength tensile',
+    meanings:[
+      {ctx:'Cylinder travel speed', def:'Piston travel speed: S = CIM ÷ A.', units:'in/min'},
+      {ctx:'Burst formula', def:'Tensile (ultimate) strength of the material.', units:'psi'}],
+    used:['cyl_extend_speed'], src:'Pocket book; Skarda/Scribd Barlow sheet' },
+  { sym:'O', name:'Outside diameter (burst formula)', cats:['pipe'], alias:'o od outside diameter',
+    meanings:[{ctx:'', def:'Outside diameter of the pipe or tubing in the burst formula P = 2tS ÷ O. Other books call it D or OD.', units:'in'}],
+    used:[], src:'Pocket book; Skarda/Scribd Barlow formula sheet' },
+  { sym:'F', name:'Force', cats:['pressure','power'], alias:'F force thrust load',
+    meanings:[
+      {ctx:'Cylinder force', def:'Thrust: F = A × PSI.', units:'lb (N)'},
+      {ctx:'Angled load, side load, shear', def:'Effective force, shaft side load, or force needed to shear. Each has its own key.', units:'lb'},
+      {ctx:'Rexroth data sheets', def:'Fax is the axial force allowed on the drive shaft.', units:'N'}],
+    used:['force_basic','cyl_extend_force'], src:'Pocket book; Flodraulic; Rexroth RE 92270 (A18VO)' },
+  { sym:'R', name:'Pitch radius of sheave', cats:['size'], alias:'r radius sheave pulley side load',
+    meanings:[{ctx:'', def:'Pitch radius of the sheave on the pump shaft, used for side load: F = HP × 63024 ÷ (RPM × R).', units:'in'}],
+    used:[], src:'Pocket book only', note:'Single source. The book prints 63024; Flodraulic and the formula sheet use 63,025. 63,025 is the rounded value of 33,000 × 12 ÷ 2π (63,025.3). 5252 × 12 gives 63,024, so the book’s number looks like a rounding artifact.' },
+  { sym:'r', name:'Radius', cats:['pipe'], alias:'r radius circle',
+    meanings:[{ctx:'', def:'Radius of a circle. Area = πr², circumference = 2πr.', units:'in'}],
+    used:['area_from_dia'], src:'Pocket book (circle formulas)' },
+  { sym:'π', name:'Pi', cats:['pipe'], alias:'pi 3.14 circle',
+    meanings:[{ctx:'', def:'Circle constant. The pocket book rounds it to 3.14; the calculators use the full value (3.14159…).', units:'no units'}],
+    used:['area_from_dia','cyl_sizer'], src:'Pocket book; standard constant' },
+  { sym:'HP', name:'Horsepower', cats:['power'], alias:'hp horsepower power',
+    meanings:[{ctx:'', def:'Mechanical horsepower. 1 HP = 2545 BTU/hr = 746 W by the shop constants (exact: 2544.43 BTU/hr, 745.7 W). In the side-load formula HP is the driving power on the shaft.', units:'HP · 1 HP = 0.746 kW'}],
+    used:['hyd_hp','pump_drive_hp'], src:'Flodraulic; Cascade Industrial; pocket book' },
+  { sym:'kW', name:'Kilowatt', cats:['power'], alias:'kw kilowatt power metric',
+    meanings:[{ctx:'', def:'Metric power. kW = bar × LPM ÷ 600. Rexroth writes it as P = qv × Δp ÷ (600 × ηt).', units:'kW · 1 kW = 1.341 HP'}],
+    used:['hyd_kw'], src:'PTC formula sheet; Rexroth RE 91510' },
+  { sym:'BTU/hr', name:'Heat power', cats:['heat','power'], alias:'btu btu/hr heat',
+    meanings:[{ctx:'', def:'Heat flow. Pressure drop with flow is converted to heat at 1 HP = 2545 BTU/hr, so BTU/hr = psi × GPM × 1.4848 (the book rounds to 1½).', units:'BTU/hr · 1 W = 3.412 BTU/hr'}],
+    used:['heat_gen','valve_heat'], src:'Flodraulic; Cascade Industrial; pocket book' },
+  { sym:'TD', name:'Temperature difference', cats:['heat'], alias:'td delta t temperature difference reservoir',
+    meanings:[{ctx:'', def:'Difference between oil and surrounding air temperature in the reservoir radiating formula HP = 0.001 × A × TD.', units:'°F'}],
+    used:[], src:'Pocket book; Flodraulic (written as T)' },
+  { sym:'RPM', name:'Revolutions per minute', cats:['size'], alias:'rpm n speed',
+    meanings:[
+      {ctx:'RPM, n', def:'Shaft speed. Rexroth writes it as n.', units:'rpm'},
+      {ctx:'n max', def:'Highest allowed speed. Rexroth lists a higher limit at partial displacement (Vg < Vg max) and ties it to inlet pressure.', units:'rpm'}],
+    used:['pump_theoretical_flow','pump_input_torque'], src:'Pocket book; Rexroth RE 91510, RA 92703' },
+  { sym:'Nm', name:'Newton-metre', cats:['power'], alias:'nm n·m newton metre torque',
+    meanings:[{ctx:'', def:'Metric torque unit used on Rexroth data sheets.', units:'N·m · 1 lb·ft = 1.356 N·m'}],
+    used:['pump_input_torque'], src:'Rexroth RE 91510; Firgelli converter (ft·lbf → J factor 1.355818)' },
+  { sym:'ηv', name:'Volumetric efficiency', cats:['eff'], alias:'eta nu ev volumetric efficiency',
+    meanings:[{ctx:'', def:'Actual flow ÷ theoretical flow. Slip (leakage) makes it less than 1. Shown as Ev in other books.', units:'% or decimal'}],
+    used:['pump_vol_eff'], src:'Rexroth RE 91510 (key); conversion/formula sheet (Ev)' },
+  { sym:'ηhm', name:'Hydraulic-mechanical efficiency', cats:['eff'], alias:'eta hm mechanical efficiency torque',
+    meanings:[{ctx:'', def:'Torque efficiency: actual torque against theoretical torque (shown as EM in other books). Appears in Rexroth’s torque formula T = Vg × Δp ÷ (20π × ηhm).', units:'% or decimal'}],
+    used:[], src:'Rexroth RE 91510 (formula); formula sheet (mechanical efficiency)', note:'The name “hydraulic-mechanical” is shown in the formula but the data sheet key I could read lists only ηv, so treat the exact name as unverified.' },
+  { sym:'ηt', name:'Total (overall) efficiency', cats:['eff'], alias:'eta t total overall efficiency',
+    meanings:[{ctx:'', def:'Overall efficiency of a pump or motor. In Rexroth’s power formula it is the divisor: P = qv × Δp ÷ (600 × ηt).', units:'% or decimal'}],
+    used:['hst_overall_eff'], src:'Rexroth RE 91510 (formula)', note:'One source. The formula shows how it is used; the key I could read does not define it.' },
+  { sym:'SG', name:'Specific gravity', cats:['pipe'], alias:'sg specific gravity density s',
+    meanings:[{ctx:'', def:'Fluid density compared with water. Petroleum hydraulic oil is about 0.87 to 0.89.', units:'no units · oil about 7.3 lb/gal'}],
+    used:[], src:'PTC formula sheet; Engineers Edge (S); Lubriplate HO sheets and EngineerFix (0.87–0.89)' },
+  { sym:'cSt', name:'Centistokes (kinematic viscosity)', cats:['pipe'], alias:'cst centistokes viscosity kinematic sus',
+    meanings:[{ctx:'', def:'Kinematic viscosity: how thick the oil is for its density. SUS (Saybolt Universal Seconds) is the older unit and is converted to cSt.', units:'cSt (mm²/s)'}],
+    used:['kinematic_visc'], src:'Hydraulics & Pneumatics viscosity table; Skarda formula sheet (SUS to cSt)' },
+  { sym:'B', name:'Bulk modulus', cats:['pipe'], alias:'k b bulk modulus compressibility beta',
+    meanings:[{ctx:'', def:'How hard a fluid resists being squeezed. ΔV = V × Δp ÷ B. Compressibility is 1 ÷ B (some books write bulk modulus as K).', units:'psi, GPa'}],
+    used:[], src:'Industrial Monitor Direct bulk-modulus guide (B); EngineerExcel (K); Machinery Lubrication' }
+];
+
+let termQuery = '', termCat = 'all', termOpen = null;
+function termList(){
+  const q = termQuery.trim();
+  const ql = q.toLowerCase();
+  let list = TERMS.map((t,i)=>({t,i}));
+  if (termCat === 'multi') list = list.filter(x=>x.t.meanings.length>1);
+  else if (termCat !== 'all') list = list.filter(x=>x.t.cats.includes(termCat));
+  if (ql){
+    list = list.filter(x=>[x.t.sym,x.t.name,x.t.alias,x.t.meanings.map(m=>m.def+' '+m.ctx).join(' ')].join(' ').toLowerCase().includes(ql));
+    list.sort((a,b)=>{
+      const sa = a.t.sym===q ? 0 : a.t.sym.toLowerCase()===ql ? 1 : 2;
+      const sb = b.t.sym===q ? 0 : b.t.sym.toLowerCase()===ql ? 1 : 2;
+      return sa-sb;
+    });
+  }
+  return list;
+}
+function renderTerms(){
+  const pills = document.getElementById('terms-pills');
+  if (pills) pills.innerHTML = TERM_CATS.map(c=>`<div class="pill ${c.id===termCat?'active':''}" onclick="termSetCat('${c.id}')">${c.name}</div>`).join('');
+  const list = termList();
+  const el = document.getElementById('terms-list');
+  if (!el) return;
+  el.innerHTML = list.length ? list.map(({t,i})=>{
+    const open = termOpen === i;
+    const multi = t.meanings.length > 1;
+    const body = open ? `<div class="term-body">
+      ${t.meanings.map(m=>`<div style="margin-bottom:10px;">
+        ${m.ctx ? `<div class="term-ctx">${m.ctx}</div>` : ''}
+        <div>${m.def}</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:2px;">Units: ${m.units}</div>
+      </div>`).join('')}
+      ${t.note ? `<div style="font-size:12px; background:var(--light-bg); border-radius:8px; padding:8px 10px; margin-bottom:8px;">⚠ ${t.note}</div>` : ''}
+      ${(t.used&&t.used.length) || (t.tools&&t.tools.length) ? `<div class="term-ctx" style="margin-top:6px;">Used in</div><div>
+        ${(t.used||[]).map(id=>{const f=FORMULAS.find(x=>x.id===id); return f ? `<span class="chip" onclick="event.stopPropagation(); termGo('${id}')">${f.title}</span>` : '';}).join('')}
+        ${(t.tools||[]).map(x=>`<span class="chip" onclick="event.stopPropagation(); termTool('${x.id}')">${x.name}</span>`).join('')}
+      </div>` : ''}
+      <div style="font-size:11px; color:var(--muted); margin-top:10px;">Source: ${t.src}</div>
+    </div>` : '';
+    return `<div class="card" onclick="termToggle(${i})">
+      <div class="term-head">
+        <div class="term-sym">${t.sym}</div>
+        <div style="flex:1;">
+          <div class="term-name">${t.name}</div>
+          ${multi ? `<div class="term-sub">${t.meanings.length} meanings · depends on the formula</div>` : `<div class="term-sub">${t.meanings[0].units}</div>`}
+        </div>
+        <div style="color:var(--muted);">${open ? '▴' : '▾'}</div>
+      </div>${body}
+    </div>`;
+  }).join('') : '<div class="empty"><div class="empty-icon">⌕</div>No terms match. Try a different spelling, like “delta p” or “gpm”.</div>';
+}
+function termSearch(v){ termQuery = v; renderTerms(); }
+function termSetCat(id){ termCat = id; renderTerms(); }
+function termToggle(i){ termOpen = termOpen === i ? null : i; renderTerms(); }
+function termGo(id){ switchTab('browse'); openFormula(id); }
+function termTool(id){ switchTab('pumps'); openPumpTool(id); }
+
+// ═══ RULES OF THUMB (Ref/Help > Rules of Thumb) ═══
+const RULE_FILTERS = [{id:'all',name:'All'},{id:'field',name:'Field check'},{id:'design',name:'Design guideline'},{id:'flag',name:'Flagged'}];
+const RULES = [
+  { title:'Pump drive power', rule:'About 1 HP of drive for every 1 GPM at 1500 PSI.', tag:'design', status:'ok',
+    check:'1 GPM × 1500 PSI ÷ 1714 = 0.88 HP of fluid power, which assumes about 87.5% overall efficiency. At 85% it works out to 1.03 HP, so the rule runs about 3% light.',
+    srcs:['Flodraulic – Basic Hydraulic Formulas','Hydrotech – Hydraulic Technical Data','Engineers Edge – Fluid Power Design Rules','Pocket book “Fluid Power Formulas”'], formula:'pump_drive_hp' },
+  { title:'Idling an unloaded pump', rule:'An unloaded, idling pump takes about 5% of its rated HP.', tag:'field', status:'ok',
+    check:'AVW Equipment describes it as oil circulating at zero PSI, with the power going to flow friction and mechanical drag, all converted to heat.',
+    srcs:['AVW Equipment – Horsepower to Drive a Pump','Flodraulic – Basic Hydraulic Formulas','Hydrotech – Hydraulic Technical Data','Engineers Edge – Fluid Power Design Rules','Pocket book “Fluid Power Formulas”'],
+    note:'Every source repeats the same figure, so treat it as one rule with one origin, not five measurements. Real idle draw depends on the pump.' },
+  { title:'Oil compressibility', rule:'Mineral oil shrinks about ½% per 1000 PSI.', tag:'design', status:'ok',
+    check:'Machinery Lubrication gives 0.4 to 0.5% per 1000 PSI up to 4000 PSI for mineral oil. University of Waterloo and Engineers Edge both say about 0.5%.',
+    srcs:['Machinery Lubrication – In Search of the Perfect Hydraulic Fluid, Part II','University of Waterloo – Hydraulic Fluid','Engineers Edge – Compressibility of Hydraulic Fluids','Pocket book “Fluid Power Formulas”'],
+    note:'It is not constant. It changes with pressure and temperature, and different fluids differ (STLE).' },
+  { title:'Water compressibility', rule:'Water shrinks about ⅓% per 1000 PSI.', tag:'design', status:'ok',
+    check:'Bulk modulus of water is about 2.2 GPa (Taylor & Francis), which is about 319,000 PSI. 1000 ÷ 319,083 = 0.31%. Industrial Monitor Direct lists 3.2 × 10⁵ PSI, which gives 0.31% too.',
+    srcs:['Taylor & Francis – Compressibility (water 2.2 GPa)','Industrial Monitor Direct – Hydraulic oil volume change (water 3.2 × 10⁵ PSI)','Pocket book “Fluid Power Formulas”','Engineers Edge – Fluid Power Design Rules'],
+    note:'⅓% is a slightly generous round number. The math says closer to 0.31%.' },
+  { title:'Heating oil with watts', rule:'Each watt raises 1 gallon of oil about 1°F per hour.', tag:'design', status:'ok',
+    check:'Math check: 1 gal of mineral oil is about 7.3 lb × 0.47 BTU/lb·°F = 3.43 BTU per °F. 1 W = 3.41 BTU/hr. 3.412 ÷ 3.431 = 0.99°F per hour.',
+    srcs:['Hydrotech – Hydraulic Technical Data (rule)','Pocket book “Fluid Power Formulas”','EngineerFix (7.3 lb/gal mineral oil)','University of Waterloo (oil specific heat 0.47)','Cascade Industrial (kW × 3413 = BTU/hr)'],
+    note:'Ignores heat leaving through the tank and lines, so a real system warms slower than this.' },
+  { title:'Heat from pressure drop', rule:'BTU/hr ≈ 1½ × PSI × GPM.', tag:'field', status:'ok',
+    check:'The exact ratio is 2545 ÷ 1714 = 1.4848, so the rule runs about 1% high. Flodraulic’s example: 10 GPM across a 300 PSI drop = 1.75 HP = about 4,453 BTU/hr.',
+    srcs:['Flodraulic – Basic Hydraulic Formulas','Cascade Industrial – Understanding Heat','Pocket book “Fluid Power Formulas”'], formula:'valve_heat' },
+  { title:'Motor torque per CIR', rule:'1 in³/rev of motor makes about 16 lb·in of torque per 100 PSI.', tag:'field', status:'ok',
+    check:'100 ÷ 2π = 15.92 lb·in. The pocket book formula T = D × PSI ÷ 24π (lb·ft) gives the same number once multiplied by 12.',
+    srcs:['Skarda/Scribd “Fluid Power Formula” sheet','Pocket book “Fluid Power Formulas”'], formula:'motor_torque',
+    note:'Theoretical torque. A real motor makes less because of mechanical efficiency. The sheet is a document-sharing upload, so it is a weaker source than the others.' },
+  { title:'Line velocity', rule:'Suction 2–4 ft/s · return 10–15 ft/s · pressure lines 15–20 ft/s up to about 2000 PSI · about 25 ft/s on high-pressure lines.', tag:'design', status:'flag',
+    check:'Agreement: suction 2–4 ft/s (Brennan, STLE, Flodraulic, Machinery Lubrication, Wilson, pocket book). Return 10–15 ft/s (Brennan, STLE, Flodraulic, Wilson). 500–2000 PSI at 15–20 ft/s (STLE, Brennan, Flodraulic).',
+    diff:['2000–3000 PSI: the pocket book and Engineers Edge stretch 15–20 ft/s up to 3000 PSI. Flodraulic puts 2100–5000 PSI at 20–25 ft/s.',
+          'Over 3000 PSI: the pocket book, STLE and Brennan say 25 ft/s. A formula sheet says 25–30. Wilson says below 30. Flodraulic says 20–25.',
+          'The pocket book calls 10–15 ft/s “pressure lines up to 500 PSI”. Other sources apply it to return lines.',
+          'Air-over-oil: the pocket book says 4 ft/s. A formula sheet says 2–4.'],
+    srcs:['STLE – Cardinal Sins of Hydraulic System Design','Brennan – Selecting Proper Components','Flodraulic – Line Sizing and Fluid Velocity','Machinery Lubrication – Hydraulic System Reliability','Wilson Company – Fluid Piping Calculations','Engineers Edge – Fluid Power Design Rules','Pocket book “Fluid Power Formulas”'], formula:'velocity_line',
+    note:'Use the ranges as a starting point and check your component data sheets. Where sources differ, the lower number is the safer pick.' }
+];
+let rulesQuery = '', rulesFilter = 'all', rulesOpen = null;
+function renderRules(){
+  const pills = document.getElementById('rules-pills');
+  if (pills) pills.innerHTML = RULE_FILTERS.map(c=>`<div class="pill ${c.id===rulesFilter?'active':''}" onclick="rulesSetFilter('${c.id}')">${c.name}</div>`).join('');
+  const q = rulesQuery.trim().toLowerCase();
+  let list = RULES.map((r,i)=>({r,i}));
+  if (rulesFilter==='flag') list = list.filter(x=>x.r.status==='flag');
+  else if (rulesFilter!=='all') list = list.filter(x=>x.r.tag===rulesFilter);
+  if (q) list = list.filter(x=>(x.r.title+' '+x.r.rule+' '+x.r.check).toLowerCase().includes(q));
+  const el = document.getElementById('rules-list'); if (!el) return;
+  el.innerHTML = list.length ? list.map(({r,i})=>{
+    const open = rulesOpen === i;
+    const f = r.formula ? FORMULAS.find(x=>x.id===r.formula) : null;
+    const body = open ? `<div class="term-body">
+      <div style="margin-bottom:8px;">${r.check}</div>
+      ${r.diff ? `<div class="term-ctx">Where sources differ</div><ul style="margin:4px 0 8px 18px;">${r.diff.map(d=>`<li style="margin-bottom:4px;">${d}</li>`).join('')}</ul>` : ''}
+      ${r.note ? `<div style="font-size:12px; background:var(--light-bg); border-radius:8px; padding:8px 10px; margin-bottom:8px;">⚠ ${r.note}</div>` : ''}
+      ${f ? `<span class="chip" onclick="event.stopPropagation(); termGo('${f.id}')">Open: ${f.title}</span>` : ''}
+      <div style="font-size:11px; color:var(--muted); margin-top:10px;">Sources: ${r.srcs.join(' · ')}</div>
+    </div>` : '';
+    return `<div class="card" onclick="rulesToggle(${i})">
+      <div class="term-head">
+        <div style="flex:1;">
+          <div class="term-name">${r.title}</div>
+          <div style="font-size:13px; margin-top:3px;">${r.rule}</div>
+          <div style="margin-top:6px;"><span class="rule-tag ${r.tag}">${r.tag==='field'?'Field check':'Design guideline'}</span> <span class="rule-tag ${r.status}">${r.status==='ok'?'✔ Checked':'⚠ Sources differ'}</span></div>
+        </div>
+        <div style="color:var(--muted);">${open ? '▴' : '▾'}</div>
+      </div>${body}
+    </div>`;
+  }).join('') : '<div class="empty"><div class="empty-icon">⌕</div>No rules match.</div>';
+}
+function rulesSearch(v){ rulesQuery = v; renderRules(); }
+function rulesSetFilter(id){ rulesFilter = id; renderRules(); }
+function rulesToggle(i){ rulesOpen = rulesOpen === i ? null : i; renderRules(); }
+
+
 function renderScenarios(){
   const html = scenarios.length === 0
     ? '<div class="empty"><div class="empty-icon">★</div>No saved scenarios yet.<br><br><small>Open any calculator, fill in values, and tap <strong>★ Save</strong> to save a machine config.</small></div>'
@@ -2869,6 +3187,17 @@ const abdexPDFData = 'JVBERi0xLjUNJeLjz9MNCjE1OSAwIG9iag08PC9MaW5lYXJpemVkIDEvTC
 
 function switchSymbolDoc(doc){
   activeSymbolDoc = doc;
+  const isTerms = doc === 'terms';
+  document.getElementById('pill-terms').classList.toggle('active', isTerms);
+  document.getElementById('terms-view').style.display = isTerms ? 'block' : 'none';
+  document.getElementById('pdf-embed-container').style.display = isTerms ? 'none' : 'block';
+  document.getElementById('symbol-doc-desc').style.display = isTerms ? 'none' : 'block';
+  if (isTerms){
+    document.getElementById('pill-iso').classList.remove('active');
+    document.getElementById('pill-abdex').classList.remove('active');
+    renderTerms();
+    return;
+  }
   document.getElementById('pill-iso').classList.toggle('active', doc==='iso');
   document.getElementById('pill-abdex').classList.toggle('active', doc==='abdex');
   const desc = document.getElementById('symbol-doc-desc');
@@ -3013,7 +3342,7 @@ const OIL_DATA = {
         bullets: [
           'Three lubrication regimes: hydrodynamic (full film), mixed, boundary',
           'Viscosity too low = film collapse = metal contact = accelerated wear',
-          'Viscosity too high = high shear losses = heat generation = efficiency loss',
+          'Viscosity too high = high shear = heat out = lower efficiency',
           'Gear pumps most sensitive to lubricity — vane pumps require AW additives',
           'Cold start is highest risk — oil too thick, film not yet established',
         ]
