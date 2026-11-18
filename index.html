@@ -261,6 +261,9 @@
   .ts-result-fix { font-size:13px; color:var(--chrome); line-height:1.5; }
   .ts-breadcrumb { font-size:11px; color:var(--muted); margin-bottom:8px; line-height:1.4; }
   .ts-restart { background:var(--brand); color:#fff; border:none; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; width:100%; }
+  #vac-card summary::-webkit-details-marker { display:none; }
+  #vac-card summary::marker { content:''; }
+  #vac-card select:focus { border-color:var(--brand); outline:none; }
   .pump-spec-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; }
   .pump-spec-card h3 { font-size:15px; font-weight:700; color:var(--navy); margin-bottom:6px; }
   .pump-spec-eyebrow { font-size:11px; color:var(--steel); text-transform:uppercase; letter-spacing:1px; font-weight:600; margin-bottom:8px; }
@@ -314,6 +317,46 @@
   </div>
   <div class="view" id="view-troubleshoot"><div id="troubleshoot-content"></div></div>
   <div class="view" id="view-pumps">
+    <details class="calc-block" id="vac-card">
+      <summary style="cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between;">
+        <span><span class="calc-label">Inlet Vacuum Check</span><br><span style="font-size:12px; color:var(--muted);">Gauge at the pump inlet vs. the pump's limit</span></span>
+        <span style="font-size:18px; color:var(--muted);">▾</span>
+      </summary>
+      <div style="margin-top:12px;">
+        <div class="input-group">
+          <label>Pump type / fluid</label>
+          <div class="input-row"><select id="vac-type" onchange="vacCalc()" style="flex:1; padding:12px; font-size:16px; border:1.5px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text);">
+            <option value="vane_oil">Vane — petroleum oil</option>
+            <option value="vane_other">Vane — water-based / phosphate ester</option>
+            <option value="gear">Gear (external)</option>
+            <option value="piston">Piston — enter datasheet limit</option>
+            <option value="custom">Other — enter limit</option>
+          </select></div>
+        </div>
+        <div class="input-group" id="vac-limit-wrap" style="display:none;">
+          <label>Pump's max inlet vacuum <span class="unit">(inHg)</span></label>
+          <div class="input-row"><input type="number" inputmode="decimal" step="any" id="vac-limit" placeholder="From pump datasheet" oninput="vacCalc()"></div>
+          <div style="font-size:11px; color:var(--muted); margin-top:4px;">Datasheets often list a minimum <em>absolute</em> inlet pressure (e.g. 0.8 bar abs). Vacuum limit = atmospheric − that value (about 6.30 inHg at sea level for 0.8 bar abs).</div>
+        </div>
+        <div class="input-group">
+          <label>Measured inlet vacuum <span class="unit" id="vac-read-unit">(inHg)</span></label>
+          <div class="input-row">
+            <input type="number" inputmode="decimal" step="any" id="vac-read" placeholder="Gauge reading" oninput="vacCalc()">
+            <button class="unit-toggle" id="vac-unit-btn" onclick="vacToggleUnit()">inHg</button>
+          </div>
+        </div>
+        <div id="vac-result"></div>
+        <div style="font-size:11px; color:var(--muted); margin-top:10px;">Read the gauge at the pump inlet port with the oil at operating temperature. Limits shown are manufacturer catalog values — your pump's datasheet always wins.</div>
+        <div style="border-top:1px solid var(--border); margin-top:14px; padding-top:12px;">
+          <span class="calc-label" style="text-transform:none;">Converter: inHg ⇄ psi</span>
+          <div class="input-row" style="margin-top:8px;">
+            <input type="number" inputmode="decimal" step="any" id="vac-c-inhg" placeholder="inHg" oninput="vacConv('inhg')">
+            <input type="number" inputmode="decimal" step="any" id="vac-c-psi" placeholder="psi" oninput="vacConv('psi')">
+          </div>
+          <div style="font-size:11px; color:var(--muted); margin-top:6px;">1 inHg = 0.491154 psi (mercury at 32 °F)</div>
+        </div>
+      </div>
+    </details>
     <div class="pills" id="pump-pills"></div>
     <div id="pumps-content"></div>
   </div>
@@ -393,9 +436,9 @@ const FORMULAS = [
       const V2=(A1*V1)/A2; const r=A1/A2;
       return { value:V2, unit:'ft/sec', alt:`Area ratio ${r.toFixed(2)}:1 · ${(V2*0.3048).toFixed(2)} m/s` };
     }},
-  { id:'energy_conservation', cat:'laws', title:'Conservation of Energy', formula:'E_in = E_out + Losses',
-    description:"Energy cannot be created or destroyed, only converted. Mechanical → hydraulic → mechanical. All inefficiencies become HEAT. Every hydraulic system needs heat rejection — losses don't disappear, they show up as fluid temperature rise.",
-    readonly:true, extra:['Total η = η_pump × η_lines × η_valves × η_actuator','Typical mobile: 65–75% overall','Servo/prop: 50–60% (throttling losses)','Load-sensing: 80–85% (matches flow to demand)','Every BTU of inefficiency raises fluid temp'] },
+  { id:'energy_conservation', cat:'laws', title:'Conservation of Energy', formula:'E_in = E_out + Heat Out',
+    description:"Energy cannot be created or destroyed, only converted. Mechanical → hydraulic → mechanical. All inefficiencies become HEAT. Every hydraulic system needs heat rejection — that heat doesn't disappear, it shows up as fluid temperature rise.",
+    readonly:true, extra:['Total η = η_pump × η_lines × η_valves × η_actuator','Typical mobile: 65–75% overall','Servo/prop: 50–60% (throttling converts the rest to heat)','Load-sensing: 80–85% (matches flow to demand)','Every BTU of inefficiency raises fluid temp'] },
   { id:'boyle_law', cat:'laws', title:"Boyle's Law", formula:'P₁V₁ = P₂V₂  (T constant)',
     description:"At constant temperature, pressure of a fixed gas mass is inversely proportional to volume. Governs accumulator behavior during slow charge/discharge. Compress gas, pressure rises proportionally.",
     inputs:[
@@ -437,7 +480,7 @@ const FORMULAS = [
       const V=Math.sqrt(2*32.174*h);
       return { value:V, unit:'ft/sec', alt:`Theoretical max exit velocity · ${(V*0.3048).toFixed(2)} m/s` };
     }},
-  { id:'darcy_weisbach', cat:'laws', title:'Darcy-Weisbach (Line Loss)', formula:'ΔP = f × (L/D) × (ρV²/2)',
+  { id:'darcy_weisbach', cat:'laws', title:'Darcy-Weisbach (Line Pressure Drop)', formula:'ΔP = f × (L/D) × (ρV²/2)',
     description:"Pressure drop in pipe due to friction. f = friction factor (depends on Re and roughness). Critical for line sizing — keep line ΔP below 5% of working pressure to avoid excessive heat.",
     inputs:[
       { id:'L', label:'Line length', unit:'ft', units:[{name:'ft',factor:1},{name:'m',factor:3.281}] },
@@ -2282,6 +2325,61 @@ function renderPumpPills(){
 
 function setPumpCategory(id){ activePumpCategory = id; renderPumpPills(); renderPumps(); }
 
+const VAC_INHG_PSI = 0.491154; // psi per inHg (mercury at 32 F)
+const VAC_TYPES = {
+  vane_oil:   { limit:5, src:'Eaton Vickers vane pump catalogs: inlet suction not to exceed 5 in. Hg for petroleum oil.' },
+  vane_other: { limit:3, src:'Eaton Vickers vane pump catalogs: 3 in. Hg for water-containing fluids and phosphate esters.' },
+  gear:       { limit:5, src:'Parker PGP/PGM gear pump catalogs: 5 in. Hg max vacuum at operating temperature.' },
+  piston:     { limit:null, src:'Piston limits are model- and speed-specific. Use the pump datasheet.' },
+  custom:     { limit:null, src:'Limit entered by you.' }
+};
+let vacUnit = 'inhg';
+// carry three decimals, then standard rounding to two
+function vacR2(x){ const v3 = Math.round(x*1000)/1000; return (Math.round(v3*100 + 1e-9)/100).toFixed(2); }
+function vacToggleUnit(){
+  const el = document.getElementById('vac-read');
+  const cur = parseFloat(el.value);
+  if (!isNaN(cur)){ el.value = vacUnit==='inhg' ? Math.round(cur*VAC_INHG_PSI*1000)/1000 : Math.round(cur/VAC_INHG_PSI*1000)/1000; }
+  vacUnit = vacUnit==='inhg' ? 'psi' : 'inhg';
+  document.getElementById('vac-unit-btn').textContent = vacUnit==='inhg' ? 'inHg' : 'psi';
+  document.getElementById('vac-read-unit').textContent = '(' + (vacUnit==='inhg' ? 'inHg' : 'psi') + ')';
+  vacCalc();
+}
+function vacConv(from){
+  const a = document.getElementById('vac-c-inhg'), b = document.getElementById('vac-c-psi');
+  if (from==='inhg'){ const v = parseFloat(a.value); b.value = isNaN(v) ? '' : vacR2(v*VAC_INHG_PSI); }
+  else { const v = parseFloat(b.value); a.value = isNaN(v) ? '' : vacR2(v/VAC_INHG_PSI); }
+}
+function vacCalc(){
+  const type = document.getElementById('vac-type').value;
+  const T = VAC_TYPES[type];
+  const needsLimit = T.limit === null;
+  document.getElementById('vac-limit-wrap').style.display = needsLimit ? 'block' : 'none';
+  const limit = needsLimit ? parseFloat(document.getElementById('vac-limit').value) : T.limit;
+  const raw = parseFloat(document.getElementById('vac-read').value);
+  const out = document.getElementById('vac-result');
+  if (isNaN(raw) || isNaN(limit) || limit <= 0){
+    out.innerHTML = '<div class="result-block"><div class="result-empty">' + (needsLimit && (isNaN(limit)||limit<=0) ? 'Enter the pump\'s limit and your gauge reading' : 'Enter your gauge reading') + '</div></div>';
+    return;
+  }
+  // compare at the displayed two decimals (gauge can't resolve finer)
+  const inHg = Number(vacR2(vacUnit==='inhg' ? raw : raw/VAC_INHG_PSI));
+  const psi  = inHg*VAC_INHG_PSI;
+  const pct  = inHg/limit*100;
+  const third = limit/3;
+  let status, msg;
+  if (inHg <= third){ status = '✔ Good'; msg = 'At or under 1/3 of the limit — about what a clean strainer and inlet line should read (rule of thumb).'; }
+  else if (inHg <= limit){ status = '⚠ Under the limit, but high'; msg = 'Above 1/3 of the limit. Check the strainer, inlet line size and kinks, oil viscosity (cold oil?), and reservoir level.'; }
+  else { status = '✖ Over the limit'; msg = 'Cavitation risk. Shut down and fix the inlet side: plugged strainer, collapsed hose, too-thick oil, or low oil level.'; }
+  out.innerHTML = '<div class="result-block">' +
+    '<div class="result-label">Inlet vacuum</div>' +
+    '<div class="result-value">' + vacR2(inHg) + '<span class="result-unit">inHg</span> <span style="font-size:16px; opacity:.8;">= ' + vacR2(psi) + ' psi</span></div>' +
+    '<div class="result-alt">' + status + ' · ' + vacR2(pct) + '% of limit (' + vacR2(limit) + ' inHg = ' + vacR2(limit*VAC_INHG_PSI) + ' psi)</div>' +
+    '<div class="result-alt" style="border-top:none; padding-top:0; margin-top:4px; font-family:inherit;">' + msg + '</div>' +
+    '<div class="result-alt" style="border-top:none; padding-top:0; margin-top:4px; font-family:inherit; font-size:11px; opacity:.8;">Limit source: ' + T.src + '</div>' +
+    '</div>';
+}
+
 function renderPumps(){
   let p = PUMPS;
   if (activePumpCategory !== 'all') p = p.filter(x=>x.cat===activePumpCategory);
@@ -2390,7 +2488,7 @@ function switchTab(tab){
   if (tab === 'scenarios') renderScenarios();
   if (tab === 'symbols'){ renderISOPDF(); }
   if (tab === 'troubleshoot'){ tsStack = ['root']; renderTroubleshoot(); }
-  if (tab === 'pumps'){ renderPumpPills(); renderPumps(); }
+  if (tab === 'pumps'){ renderPumpPills(); renderPumps(); vacCalc(); }
   if (tab === 'oil'){ renderOilPills(); renderOilContent(); }
 }
 
@@ -4504,7 +4602,7 @@ const HELP_SECTIONS = [
     color: '#00263E',
     content: 'All formulas available in the Toolkit, organized by category.',
     formula_groups: [
-      { cat: 'Laws & Principles', items: ["Pascal's Law — P = F ÷ A", "Bernoulli's Equation — P + ½ρV² + ρgh = constant", 'Continuity Equation — A₁V₁ = A₂V₂', 'Conservation of Energy — E_in = E_out + Losses', "Boyle's Law — P₁V₁ = P₂V₂", "Charles's Law — V₁/T₁ = V₂/T₂", "Newton's 2nd Law — F = m × a", "Torricelli's Theorem — V = √(2gh)", 'Darcy-Weisbach (Line Loss) — ΔP = f × (L/D) × (ρV²/2)'] },
+      { cat: 'Laws & Principles', items: ["Pascal's Law — P = F ÷ A", "Bernoulli's Equation — P + ½ρV² + ρgh = constant", 'Continuity Equation — A₁V₁ = A₂V₂', 'Conservation of Energy — E_in = E_out + Heat Out', "Boyle's Law — P₁V₁ = P₂V₂", "Charles's Law — V₁/T₁ = V₂/T₂", "Newton's 2nd Law — F = m × a", "Torricelli's Theorem — V = √(2gh)", 'Darcy-Weisbach (Line Pressure Drop) — ΔP = f × (L/D) × (ρV²/2)'] },
       { cat: 'Fundamentals', items: ['Pressure — P = F ÷ A', 'Force — F = P × A', 'Area from Diameter — A = 0.7854 × D²', 'Flow Velocity in Line — V = (GPM × 0.3208) ÷ A'] },
       { cat: 'Power', items: ['Hydraulic Horsepower — HP = (PSI × GPM) ÷ 1714', 'Hydraulic Power (Metric) — kW = (bar × LPM) ÷ 600', 'Heat Generation — BTU/hr = (1 − Eff) × HP × 2545'] },
       { cat: 'Cylinders', items: ['Extend Force — F = PSI × A_bore', 'Retract Force — F = PSI × (A_bore − A_rod)', 'Extend Speed — V = (GPM × 231) ÷ (A_bore × 60)', 'Retract Speed — V = (GPM × 231) ÷ (A_annular × 60)', 'Flow Required — GPM = (A × V) ÷ 231', 'Differential Cylinder — ratio and net force', 'Stroke Time — t = (Volume ÷ GPM) × 60'] },
