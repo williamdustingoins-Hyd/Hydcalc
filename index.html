@@ -35,6 +35,10 @@
     background:var(--navy); color:#fff; padding:calc(12px + var(--safe-top)) 16px 12px;
     position:sticky; top:0; z-index:100; box-shadow:0 2px 8px rgba(0,0,0,.3); border-bottom:3px solid var(--brand-red);
   }
+  /* iPhone status-bar area: fixed navy strip so iOS tints the top edge navy instead of fading in the light page background */
+  body::before { content:''; position:fixed; top:0; left:0; right:0; height:var(--safe-top); background:var(--navy); z-index:200; pointer-events:none; }
+  html { background:var(--navy); }
+  body { min-height:100vh; }
   .header-row { display:flex; align-items:center; gap:12px; }
   .header-row { justify-content:space-between; }
   .brand-logo { height:30px; width:auto; display:block; }
